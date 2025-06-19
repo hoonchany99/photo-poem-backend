@@ -5,7 +5,8 @@ const OpenAI = require('openai').OpenAI;
 
 const app = express();
 
-app.use(cors());
+// CORS: 모든 출처 허용
+app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '50mb' }));
 
 console.log('OPENAI_API_KEY 존재 여부:', !!process.env.OPENAI_API_KEY);
@@ -84,6 +85,7 @@ app.post('/poem', async (req, res) => {
 });
 
 const port = process.env.PORT || 3001;
+
 app.listen(port, '0.0.0.0', () => {
-  console.log(`서버 실행 중: http://localhost:${port}`);
+  console.log(`서버 실행 중: http://localhost:${port} (0.0.0.0 바인딩)`);
 });
