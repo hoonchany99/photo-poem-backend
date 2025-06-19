@@ -16,13 +16,13 @@ const openai = new OpenAI({
 
 app.post('/poem', async (req, res) => {
   try {
-    const { imageBase64, moodTag } = req.body;
+    const { imageBase64, moodTag, story } = req.body;
 
-    if (!imageBase64) {
-      return res.status(400).json({ error: 'imageBase64가 필요합니다.' });
+    if (!imageBase64 && !story) {
+      return res.status(400).json({ error: '사진 또는 사연 중 하나는 반드시 입력되어야 합니다.' });
     }
 
-    // 감정 점수 대신 moodTag(기분 태그) 설명 포함
+    // 프롬프트
     const promptSystem = `
 너는 한국의 실제 시를 추천하는 전문 시인 역할이다.
 
@@ -31,13 +31,13 @@ app.post('/poem', async (req, res) => {
 2. 시는 반드시 다음 순서로 작성할 것:
    - 첫 줄: 시 제목
    - 둘째 줄: 시인 이름
-   - 셋째 줄부터: 시 본문 (각 행은 \\n 으로 줄바꿈, 연과 연 사이는 반드시 \\n\\n 으로 구분)
+   - 셋째 줄부터: 시 본문 (각 행은 \\n 으로 줄바꿈, 연과 연 사이는 반드시 \\n\\n 으로 구분). 시 본문은 절대로 생략하거나 축약하지 말고, 항상 전체를 빠짐없이 출력할 것.
 3. 시 본문이 끝난 후 빈 줄 하나를 추가할 것.
 4. 이후 시에 대한 설명과 사진을 올린 사람의 심정을 추측하여 격려나 위로, 응원의 말을 자연스럽게 작성할 것.
 5. 설명과 시가 절대 섞이지 않도록 분리해서 작성할 것.
 6. 링크, 코드블록, 따옴표 등 특수문자는 포함하지 말 것.
 7. 사람 관련 정보(얼굴, 나이, 성별 등)는 절대 언급하지 말 것.
-8. 반드시 일관된 형식을 유지할 것.
+8. 반드시 일관된 형식을 유지할 것. 출력 형식을 엄격하게 준수하며, 시와 설명은 분리해서 작성할 것.
 
 아래는 예시 답변 형식이다:
 
@@ -49,26 +49,31 @@ app.post('/poem', async (req, res) => {
 사진을 올린 분께도 이 시처럼 힘들고 어려운 상황 속에서도 흔들리지 않고 앞으로 나아가길 응원합니다.
 `;
 
+    // 유저 메시지 구성
+    let userText = '이 이미지를 보고 색감, 사물, 분위기를 분석하여 가장 어울리는 한국의 시를 추천해줘. ';
+    userText += '사람에 대한 정보는 절대 언급하지 말고, 사람은 존재하지 않는다고 가정할 것. ';
+    userText += '출력 형식은 반드시 위 시스템 프롬프트 조건을 따를 것. ';
+    if (moodTag) {
+      userText += `사진을 올린 사람의 기분은 '${moodTag}'임을 참고해줘. `;
+    }
+    if (story) {
+      userText += `추가로, 이 사연을 참고해줘: ${story}`;
+    }
+
+    const userMessage = [
+      { type: 'text', text: userText },
+    ];
+
+    if (imageBase64) {
+      userMessage.push({ type: 'image_url', image_url: { url: imageBase64 } });
+    }
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       temperature: 0.7,
       messages: [
         { role: 'system', content: promptSystem },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text:
-                '이 이미지를 보고 사물, 색감, 분위기를 분석하여 가장 어울리는 한국의 저작권 만료된 공공 도메인 시를 추천해줘. ' +
-                '사람 관련 정보는 절대 언급하지 말고, 사람은 존재하지 않는다고 가정할 것. ' +
-                '링크는 절대 포함하지 말 것. ' +
-                '출력 형식은 반드시 위 시스템 프롬프트 조건을 따를 것. ' +
-                `사용자의 기분 태그는 "${moodTag}"임을 참고하라.`,
-            },
-            { type: 'image_url', image_url: { url: imageBase64 } },
-          ],
-        },
+        { role: 'user', content: userMessage },
       ],
     });
 
