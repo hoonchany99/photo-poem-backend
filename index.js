@@ -18,8 +18,8 @@ app.post('/poem', async (req, res) => {
   try {
     const { imageBase64, moodTag, story } = req.body;
 
-    if (!imageBase64) {
-      return res.status(400).json({ error: 'imageBase64가 필요합니다.' });
+    if ((!imageBase64 && (!story || story.trim() === '')) && (!moodTag || moodTag.trim() === '')) {
+      return res.status(400).json({ error: '사진, 사연, 감정 중 하나는 반드시 필요합니다.' });
     }
 
     // 감정 점수 대신 moodTag(기분 태그) 설명 포함
@@ -61,28 +61,33 @@ app.post('/poem', async (req, res) => {
 사진과 사용자의 기분, 사연을 반영하여, 사진을 올린 분께도 이 시처럼 힘들고 어려운 상황 속에서도 흔들리지 않고 앞으로 나아가길 응원합니다.
 `;
 
+    const messages = [
+      { role: 'system', content: promptSystem },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text:
+              '이 이미지를 보고 사물, 색감, 분위기를 분석하여 가장 어울리는 한국의 저작권 만료된 공공 도메인 시를 추천해줘. ' +
+              '사람 관련 정보는 절대 언급하지 말고, 사람은 존재하지 않는다고 가정할 것. ' +
+              '링크는 절대 포함하지 말 것. ' +
+              '출력 형식은 반드시 위 시스템 프롬프트 조건을 따를 것. ' +
+              `사용자의 기분 태그는 "${moodTag}"임을 참고하라.` +
+              `사용자의 현재 사연은 "${story}"임을 참고하라.`,
+          },
+        ],
+      },
+    ];
+
+    if (imageBase64) {
+      messages[1].content.push({ type: 'image_url', image_url: { url: imageBase64 } });
+    }
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       temperature: 0.7,
-      messages: [
-        { role: 'system', content: promptSystem },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text:
-                '이 이미지를 보고 사물, 색감, 분위기를 분석하여 가장 어울리는 한국의 저작권 만료된 공공 도메인 시를 추천해줘. ' +
-                '사람 관련 정보는 절대 언급하지 말고, 사람은 존재하지 않는다고 가정할 것. ' +
-                '링크는 절대 포함하지 말 것. ' +
-                '출력 형식은 반드시 위 시스템 프롬프트 조건을 따를 것. ' +
-                `사용자의 기분 태그는 "${moodTag}"임을 참고하라.` +
-                `사용자의 현재 사연은 "${story}"임을 참고하라.`,
-            },
-            { type: 'image_url', image_url: { url: imageBase64 } },
-          ],
-        },
-      ],
+      messages,
     });
 
     console.log('GPT 응답:', completion.choices[0].message.content);
