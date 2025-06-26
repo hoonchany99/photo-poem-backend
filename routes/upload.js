@@ -9,6 +9,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+console.log(process.env.DATABASE_URL);
+
 // POST /api/poems - 시 등록
 router.post('/poems', async (req, res) => {
   try {
@@ -27,9 +29,9 @@ router.post('/poems', async (req, res) => {
     const embedding = embeddingResponse.data[0].embedding;
 
     await pool.query(
-  'INSERT INTO poems (title, author, excerpt, source, embedding) VALUES ($1, $2, $3, $4, $5)',
-  [title, author, excerpt, source, JSON.stringify(embedding)]
-);
+      'INSERT INTO poems (title, author, excerpt, source, embedding) VALUES ($1, $2, $3, $4, $5)',
+      [title, author, excerpt, source, JSON.stringify(embedding)]
+    );
 
     res.json({ success: true });
   } catch (err) {
