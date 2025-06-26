@@ -10,7 +10,7 @@ const app = express();
 console.log('DATABASE_URL:', process.env.DATABASE_URL);
 
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: ['http://localhost:3000','https://photo-poem-frontend.vercel.app'],
   optionsSuccessStatus: 200,
 }));
 
