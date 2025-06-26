@@ -10,6 +10,7 @@ const openai = new OpenAI({
 });
 
 router.post('/recommend', async (req, res) => {
+  console.log('Proro');
   try {
     const { imageUrl, base64Image, queryText, moodTag } = req.body;
 
