@@ -2,11 +2,20 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const OpenAI = require('openai').OpenAI;
+const uploadRoutes = require('./routes/upload');
+
 
 const app = express();
 
-app.use(cors());
+// 1. CORS 미들웨어는 가장 먼저 설정
+app.use(cors({
+  origin: 'http://localhost:3000', // 프론트엔드 주소를 명확히 지정
+  optionsSuccessStatus: 200,
+}));
+
 app.use(express.json({ limit: '50mb' }));
+app.use('/api', uploadRoutes);
+
 
 console.log('OPENAI_API_KEY 존재 여부:', !!process.env.OPENAI_API_KEY);
 
