@@ -52,7 +52,11 @@ async function uploadBufferToSupabase(buffer) {
 
 router.post('/recommend', async (req, res) => {
   try {
+    console.log('req.body:', req.body);
     const { imageUrl, moodTag, story: queryText } = req.body;
+    console.log('imageUrl:', imageUrl);
+    console.log('moodTag:', moodTag);
+    console.log('queryText:', queryText);
 
     if ((!imageUrl) && (!queryText || queryText.trim() === '') && (!moodTag || moodTag.trim() === '')) {
       return res.status(400).json({ error: '사진 URL, 사연, 또는 감정 태그 중 하나는 반드시 입력해야 합니다.' });
@@ -88,6 +92,7 @@ router.post('/recommend', async (req, res) => {
     if (moodTag) queryForEmbedding += (queryForEmbedding ? ' ' : '') + moodTag;
 
     console.log(queryForEmbedding);
+    
     if (!queryForEmbedding.trim()) {
       return res.status(400).json({ error: '임베딩에 사용할 텍스트가 없습니다.' });
     }
