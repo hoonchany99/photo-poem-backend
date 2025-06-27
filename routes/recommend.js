@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const { Pool } = require('pg');
 const OpenAI = require('openai').OpenAI;
+const { createClient } = require('@supabase/supabase-js');
+const { v4: uuidv4 } = require('uuid');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -9,18 +12,56 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-router.post('/recommend', async (req, res) => {
-  console.log('Proro');
-  try {
-    const { imageUrl, base64Image, queryText, moodTag } = req.body;
+// Supabase 클라이언트 생성
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-    if ((!imageUrl && !base64Image) && (!queryText || queryText.trim().length === 0) && (!moodTag || moodTag.trim().length === 0)) {
-      return res.status(400).json({ error: '사진, 사연, 또는 감정 태그 중 하나는 반드시 입력해야 합니다.' });
+// multer 메모리 저장소 설정
+const upload = multer({ storage: multer.memoryStorage() });
+
+async function uploadBufferToSupabase(buffer) {
+  try {
+    const fileName = `uploads/${uuidv4()}.jpg`;
+
+    const { data, error } = await supabase.storage
+      .from(process.env.BUCKET_NAME)
+      .upload(fileName, buffer, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+
+    if (error) {
+      console.error('Supabase 업로드 에러:', error);
+      throw error;
     }
 
-    // 1) 사진이 있으면 GPT-4 Vision 모델로 이미지 설명 생성 (imageUrl만 지원, base64Image는 미지원 표시)
+    const { publicURL, error: urlError } = supabase.storage
+      .from(process.env.BUCKET_NAME)
+      .getPublicUrl(fileName);
+
+    if (urlError) {
+      console.error('Supabase 공개 URL 에러:', urlError);
+      throw urlError;
+    }
+
+    return publicURL;
+  } catch (err) {
+    console.error('uploadBufferToSupabase 실패:', err);
+    throw err;
+  }
+}
+
+router.post('/recommend', async (req, res) => {
+  try {
+    const { imageUrl, moodTag, story: queryText } = req.body;
+
+    if ((!imageUrl) && (!queryText || queryText.trim() === '') && (!moodTag || moodTag.trim() === '')) {
+      return res.status(400).json({ error: '사진 URL, 사연, 또는 감정 태그 중 하나는 반드시 입력해야 합니다.' });
+    }
+
     let caption = '';
+
     if (imageUrl) {
+      console.log("Received image URL:", imageUrl);
       const messagesForImageCaption = [
         { role: 'system', content: 'You are a helpful assistant that describes images in concise Korean.' },
         {
@@ -39,23 +80,18 @@ router.post('/recommend', async (req, res) => {
       });
 
       caption = imageCaptionResponse.choices[0].message.content.trim();
-    } else if (base64Image) {
-      caption = '[이미지 설명 불가: base64 이미지 데이터는 현재 지원되지 않습니다]';
     }
 
-    // 2) 사진 설명 + story + moodTag 를 합쳐서 임베딩 텍스트 생성
     let queryForEmbedding = '';
     if (caption) queryForEmbedding += caption;
     if (queryText) queryForEmbedding += (queryForEmbedding ? ' ' : '') + queryText;
     if (moodTag) queryForEmbedding += (queryForEmbedding ? ' ' : '') + moodTag;
 
     console.log(queryForEmbedding);
-
     if (!queryForEmbedding.trim()) {
       return res.status(400).json({ error: '임베딩에 사용할 텍스트가 없습니다.' });
     }
 
-    // 3) 임베딩 생성
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-3-small',
       input: queryForEmbedding,
@@ -79,7 +115,6 @@ router.post('/recommend', async (req, res) => {
 
     const pgVectorString = '[' + embedding.join(',') + ']';
 
-    // 4) DB에서 유사도 검색
     const result = await pool.query(
       `SELECT id, title, author, excerpt, source
        FROM poems
@@ -94,7 +129,6 @@ router.post('/recommend', async (req, res) => {
 
     console.log(result);
 
-    // 5) GPT에게 3개 시 중 가장 어울리는 시 하나 선택 요청
     const gptMessages = [
       {
         role: 'system',
