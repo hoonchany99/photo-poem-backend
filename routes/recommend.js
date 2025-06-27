@@ -53,7 +53,7 @@ async function uploadBufferToSupabase(buffer) {
 router.post('/recommend', async (req, res) => {
   try {
     console.log('req.body:', req.body);
-    const { imageUrl, moodTag, story: queryText } = req.body;
+    const { imageUrl, moodTag, queryText } = req.body;
     console.log('imageUrl:', imageUrl);
     console.log('moodTag:', moodTag);
     console.log('queryText:', queryText);
